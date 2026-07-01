@@ -27,12 +27,24 @@ func expThreshold(level int) int {
 	if level <= 1 {
 		return 6
 	}
-	f := float64(level - 1)
-	value := 6 + 4*f + 1.6*f*f + 0.45*f*f*f
-	if value > 240 {
-		value = 240
+	if level <= 20 {
+		f := float64(level - 1)
+		v := 6 + 4*f + 1.6*f*f + 0.45*f*f*f
+		return int(v)
 	}
-	return int(value)
+	// 21–49 指数增长；50+ 陡峭指数，封顶 80000
+	base := float64(expThreshold(20))
+	steps := float64(level - 20)
+	var v float64
+	if level <= 49 {
+		v = base * math.Pow(1.12, steps)
+	} else {
+		v = float64(expThreshold(49)) * math.Pow(1.22, float64(level-49))
+	}
+	if v > 80000 {
+		v = 80000
+	}
+	return int(v)
 }
 
 // 第5波后进入爆发膨胀区间，每两波整体属性翻倍。
@@ -42,6 +54,14 @@ func enemyGrowthMultiplier(wave int) float64 {
 	}
 	steps := (wave-5)/2 + 1
 	return math.Pow(2, float64(steps))
+}
+
+func spawnGrowthMultiplier(wave int) float64 {
+	if wave < 14 {
+		return 1
+	}
+	steps := (wave-14)/2 + 1
+	return math.Pow(1.55, float64(steps))
 }
 
 func NewGame() *Game {
@@ -55,7 +75,7 @@ func NewGame() *Game {
 			BulletSpeed: 10,
 			BulletCount: 1, Spread: 0,
 			SideGuns: 0, BackGun: false, LaserLevel: 0,
-		MoveSpeed: 1.0, PickupRange: 60,
+			MoveSpeed: 1.0, PickupRange: 120,
 		CritChance: 0.05, CritMult: 2.0,
 		Regen: 0,
 		Level: 1, Exp: 0, ExpToNext: expThreshold(1),
@@ -220,11 +240,24 @@ func (g *Game) startGame() {
 	p.BackGun = false
 	p.LaserLevel = 0
 	p.MoveSpeed = 1.0
-	p.PickupRange = 60
+	p.PickupRange = 120
 	p.CritChance = 0.05
 	p.CritMult = 2.0
 	p.Regen = 0
 	p.Shield = 0
+	p.ShieldSkill = false
+	p.ShieldTimer = 0
+	p.Lifesteal = 0
+	p.CritDefense = false
+	p.GiantSlayer = false
+	p.FlyingKick = false
+	p.CritRhythm = false
+	p.CritRhythmStacks = 0
+	p.CritRhythmTimer = 0
+	p.UltimateMark = false
+	p.UltimateTimer = 0
+	p.UltimateWindow = 0
+	p.BaronHand = false
 	p.Invincible = 60
 	p.Level = 1
 	p.Exp = 0
@@ -268,6 +301,7 @@ func (g *Game) updatePlaying() {
 	g.WaveTimer++
 	g.updateStars()
 	g.updatePlayer()
+	g.updatePlayerPassives()
 	g.updateBullets()
 	g.updateEnemies()
 	g.updateCoins()
@@ -373,7 +407,70 @@ func (g *Game) updatePlayer() {
 
 	p.FireCooldown--
 	if p.FireCooldown <= 0 {
-		p.FireCooldown = p.FireRate
+		p.FireCooldown = g.currentFireRate()
 		g.fireWeapons()
+	}
+}
+
+func (g *Game) currentFireRate() int {
+	rate := g.Player.FireRate
+	if g.Player.CritRhythmStacks > 0 {
+		rate = int(float64(rate) * math.Pow(0.94, float64(g.Player.CritRhythmStacks)))
+	}
+	return max(2, rate)
+}
+
+func (g *Game) updatePlayerPassives() {
+	p := g.Player
+	if p.CritRhythmTimer > 0 {
+		p.CritRhythmTimer--
+		if p.CritRhythmTimer <= 0 {
+			p.CritRhythmStacks = 0
+		}
+	}
+
+	if p.ShieldSkill {
+		p.ShieldTimer++
+		if p.ShieldTimer >= 60*12 {
+			p.ShieldTimer = 0
+			p.Shield = max(p.Shield, 180)
+		}
+	}
+
+	if p.UltimateMark {
+		p.UltimateTimer++
+		if p.UltimateWindow > 0 {
+			p.UltimateWindow--
+			if p.UltimateWindow == 0 {
+				g.detonateUltimateMarks()
+			}
+		} else if p.UltimateTimer >= 60*28 {
+			p.UltimateTimer = 0
+			p.UltimateWindow = 60*5
+			for i := range g.Enemies {
+				g.Enemies[i].MarkedDamage = 0
+			}
+		}
+	}
+}
+
+func (g *Game) detonateUltimateMarks() {
+	dead := make([]int, 0)
+	for i := range g.Enemies {
+		e := &g.Enemies[i]
+		if e.MarkedDamage <= 0 || e.Health <= 0 {
+			e.MarkedDamage = 0
+			continue
+		}
+		e.Health -= e.MarkedDamage
+		e.MarkedDamage = 0
+		g.createExplosion(e.X, e.Y, 1)
+		if e.Health <= 0 {
+			dead = append(dead, i)
+		}
+	}
+	// 从后往前处理死亡，避免索引错乱
+	for k := len(dead) - 1; k >= 0; k-- {
+		g.onEnemyDeath(dead[k])
 	}
 }

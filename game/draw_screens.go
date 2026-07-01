@@ -12,16 +12,17 @@ func (g *Game) drawHUD() {
 	f := fontSmall()
 	p := g.Player
 
+	// 顶栏
 	scoreText := fmt.Sprintf("分数: %d", g.Score)
 	text.Draw(g.offscreen, scoreText, f, 10, 15, color.RGBA{255, 255, 200, 255})
 
-	hsText := fmt.Sprintf("最高: %d", g.HighScore)
-	b := text.BoundString(f, hsText)
-	text.Draw(g.offscreen, hsText, f, ScreenWidth-b.Dx()-10, 15, color.RGBA{255, 200, 100, 255})
-
 	waveText := fmt.Sprintf("第 %d 波", g.Wave)
-	b = text.BoundString(f, waveText)
+	b := text.BoundString(f, waveText)
 	text.Draw(g.offscreen, waveText, f, ScreenWidth/2-b.Dx()/2, 15, color.RGBA{200, 150, 255, 255})
+
+	hsText := fmt.Sprintf("最高: %d", g.HighScore)
+	b = text.BoundString(f, hsText)
+	text.Draw(g.offscreen, hsText, f, ScreenWidth-b.Dx()-10, 15, color.RGBA{255, 200, 100, 255})
 
 	barX := float32(10)
 	barY := float32(22)
@@ -34,28 +35,33 @@ func (g *Game) drawHUD() {
 
 	hpText := fmt.Sprintf("%.0f/%.0f", p.Health, p.MaxHealth)
 	b = text.BoundString(f, hpText)
-	text.Draw(g.offscreen, hpText, f, 10+140/2-b.Dx()/2, 31, color.RGBA{255, 255, 255, 255})
+	text.Draw(g.offscreen, hpText, f, 10+70-b.Dx()/2, 31, color.RGBA{255, 255, 255, 255})
 
 	expBarY := float32(36)
 	expRatio := float32(p.Exp) / float32(p.ExpToNext)
 	vector.DrawFilledRect(g.offscreen, barX, expBarY, barW, 6, color.RGBA{30, 60, 40, 200}, false)
 	vector.DrawFilledRect(g.offscreen, barX, expBarY, barW*expRatio, 6, color.RGBA{100, 255, 150, 255}, false)
 
-	lvlText := fmt.Sprintf("等级 %d", p.Level)
+	lvlText := fmt.Sprintf("Lv%d", p.Level)
 	text.Draw(g.offscreen, lvlText, f, 155, 43, color.RGBA{150, 255, 200, 255})
 
-	statY := 58
-	text.Draw(g.offscreen, fmt.Sprintf("伤害: %d", p.Damage), f, 10, statY, color.RGBA{255, 180, 180, 255})
-	text.Draw(g.offscreen, fmt.Sprintf("射速: %.1f/秒", 60.0/float64(p.FireRate)), f, 10, statY+15, color.RGBA{255, 220, 180, 255})
-	text.Draw(g.offscreen, fmt.Sprintf("暴击: %d%%", int(p.CritChance*100)), f, 10, statY+30, color.RGBA{255, 180, 255, 255})
+	// 左栏全部属性
+	x := 10
+	y0 := 58
+	dy := 14
+	c := color.RGBA{200, 200, 220, 255}
+	cy := color.RGBA{255, 220, 100, 255}
+	cg := color.RGBA{100, 220, 180, 255}
+	cp := color.RGBA{200, 160, 255, 255}
 
-	text.Draw(g.offscreen, fmt.Sprintf("击杀: %d", p.Kills), f, ScreenWidth-100, statY, color.RGBA{200, 200, 255, 255})
-	text.Draw(g.offscreen, fmt.Sprintf("金币: %d", p.Coins), f, ScreenWidth-100, statY+15, color.RGBA{255, 220, 100, 255})
+	text.Draw(g.offscreen, fmt.Sprintf("伤害 %d  射速 %.1f/s  暴击 %d%%x%.1f", p.Damage, 60.0/float64(p.FireRate), int(p.CritChance*100), p.CritMult), f, x, y0, cp)
+	text.Draw(g.offscreen, fmt.Sprintf("子弹 %d  散射 %d  侧翼 %d", p.BulletCount, p.Spread, p.SideGuns), f, x, y0+dy, cy)
+	text.Draw(g.offscreen, fmt.Sprintf("移速 %.1f  拾取 %.0f  弹速 %.1f", p.MoveSpeed, p.PickupRange, p.BulletSpeed), f, x, y0+dy*2, c)
+	text.Draw(g.offscreen, fmt.Sprintf("吸血 %d%%  回血 %.1f/s  护盾 %ds", int(p.Lifesteal*100), p.Regen, p.Shield/60), f, x, y0+dy*3, cg)
 
-	if p.Shield > 0 {
-		t := fmt.Sprintf("护盾: %d秒", p.Shield/60)
-		text.Draw(g.offscreen, t, f, ScreenWidth-100, statY+30, color.RGBA{100, 200, 255, 255})
-	}
+	// 右上击杀与金币
+	text.Draw(g.offscreen, fmt.Sprintf("击杀 %d", p.Kills), f, ScreenWidth-100, y0, color.RGBA{200, 200, 255, 255})
+	text.Draw(g.offscreen, fmt.Sprintf("金币 %d", p.Coins), f, ScreenWidth-100, y0+dy, color.RGBA{255, 220, 100, 255})
 }
 
 func (g *Game) drawPaused() {

@@ -1,0 +1,8 @@
+{
+  "coins": 134,
+  "hp_level": 0,
+  "bullet_level": 0,
+  "boost_card": false,
+  "initial_cards": 0,
+  "infinite_gold": false
+}

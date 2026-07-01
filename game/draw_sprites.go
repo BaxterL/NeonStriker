@@ -40,6 +40,24 @@ func (g *Game) drawPlayerShip(x, y float64, scale float64, alpha float32) {
 
 	g.fillTriangle(xf-10*s, yf+14*s, xf-7*s, yf+14*s, xf-9*s, yf+14*s+flame*0.5*s, fc)
 	g.fillTriangle(xf+10*s, yf+14*s, xf+7*s, yf+14*s, xf+9*s, yf+14*s+flame*0.5*s, fc)
+
+	if g.Player != nil && g.Player.TwinShip && scale <= 1.1 {
+		g.drawDroneShip(x-42, y+8, 0.65, alpha)
+		g.drawDroneShip(x+42, y+8, 0.65, alpha)
+	}
+}
+
+func (g *Game) drawDroneShip(x, y float64, scale float64, alpha float32) {
+	s := float32(scale)
+	xf := float32(x)
+	yf := float32(y)
+	body := color.RGBA{90, 255, 230, uint8(230 * alpha)}
+	core := color.RGBA{240, 255, 255, uint8(255 * alpha)}
+	vector.DrawFilledCircle(g.offscreen, xf, yf, 16*s, color.RGBA{60, 220, 255, uint8(80 * alpha)}, false)
+	g.fillTriangle(xf, yf-15*s, xf-12*s, yf+11*s, xf+12*s, yf+11*s, body)
+	g.fillTriangle(xf-12*s, yf+3*s, xf-20*s, yf+14*s, xf-7*s, yf+11*s, body)
+	g.fillTriangle(xf+12*s, yf+3*s, xf+20*s, yf+14*s, xf+7*s, yf+11*s, body)
+	vector.DrawFilledCircle(g.offscreen, xf, yf-3*s, 4*s, core, false)
 }
 
 func (g *Game) drawEnemy(e Enemy) {

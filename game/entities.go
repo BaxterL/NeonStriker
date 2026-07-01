@@ -49,7 +49,12 @@ func (g *Game) fireWeapons() {
 	if count == 1 {
 		g.Bullets = append(g.Bullets, makeB(p.X, p.Y-p.Height/2, 0, -speed, baseDmg, bulletCol, bulletSize, 0))
 	} else {
-		totalSpread := spreadDeg + float64(count-1)*8
+		var totalSpread float64
+		if count <= 3 {
+			totalSpread = spreadDeg + float64(count-1)*10
+		} else {
+			totalSpread = spreadDeg + 20 + float64(count-3)*20
+		}
 		step := totalSpread / float64(count-1)
 		startAngle := -totalSpread / 2
 		for i := 0; i < count; i++ {
@@ -104,7 +109,7 @@ func (g *Game) spawnEnemies() {
 	}
 
 	// 第一首领击败前，节奏更平缓；之后开始明显加速并引入新敌机类型。
-	waveMul := waveGrowth(g.Wave) * enemyGrowthMultiplier(g.Wave)
+	waveMul := waveGrowth(g.Wave) * spawnGrowthMultiplier(g.Wave)
 	baseInterval := 48
 	interval := float64(baseInterval) / waveMul
 	if g.BossDefeated > 0 {
@@ -156,11 +161,14 @@ func (g *Game) spawnEnemies() {
 			Health: hp, MaxHealth: hp,
 			VX: (rand.Float64()-0.5)*1.2,
 			VY: (1.6 + rand.Float64()) * spdMult,
-			Score: 5 + g.Wave/2, ExpReward: 1, CoinDrop: 1,
+			Score: 5 + g.Wave/2, ExpReward: 2 + g.Wave*3/4, CoinDrop: 1,
 			EnemyType: 0, Hue: rand.Float64() * 360,
 		})
 	case 1:
 		hp := int(8 * hpMult)
+		if g.BossDefeated >= 3 {
+			hp = max(hp, g.eliteHPFromPlayerPower(2.0))
+		}
 		g.Enemies = append(g.Enemies, Enemy{
 			X: randRange(50, ScreenWidth-50),
 			Y: -40, Width: 44, Height: 44,
@@ -168,30 +176,36 @@ func (g *Game) spawnEnemies() {
 			VX: (rand.Float64()-0.5)*3.2,
 			VY: (1.3 + rand.Float64()*0.6) * spdMult,
 			Score: 16 + g.Wave,
-			ExpReward: 3, CoinDrop: 3,
+			ExpReward: 4 + g.Wave, CoinDrop: 3,
 			EnemyType: 1, Hue: 280 + rand.Float64()*40,
 		})
 	case 2:
 		hp := int(20 * hpMult)
+		if g.BossDefeated >= 3 {
+			hp = max(hp, g.eliteHPFromPlayerPower(4.0))
+		}
 		g.Enemies = append(g.Enemies, Enemy{
 			X: randRange(50, ScreenWidth-50),
 			Y: -50, Width: 54, Height: 54,
 			Health: hp, MaxHealth: hp,
 			VX: math.Sin(rand.Float64()*math.Pi*2) * 1.5,
 			VY: (0.8 + rand.Float64()*0.4) * spdMult,
-			Score: 40 + g.Wave*2, ExpReward: 6, CoinDrop: 6,
+			Score: 40 + g.Wave*2, ExpReward: 9 + g.Wave*3/2, CoinDrop: 6,
 			EnemyType: 2, FireCd: 120, FireTimer: 60,
 			Hue: 200 + rand.Float64()*30,
 		})
 	case 3:
 		hp := int(45 * hpMult)
+		if g.BossDefeated >= 3 {
+			hp = max(hp, g.eliteHPFromPlayerPower(6.0))
+		}
 		g.Enemies = append(g.Enemies, Enemy{
 			X: randRange(60, ScreenWidth-60),
 			Y: -60, Width: 70, Height: 70,
 			Health: hp, MaxHealth: hp,
 			VX: 0,
 			VY: 0.6 * spdMult,
-			Score: 90 + g.Wave*3, ExpReward: 12, CoinDrop: 10,
+			Score: 90 + g.Wave*3, ExpReward: 14 + g.Wave*2, CoinDrop: 10,
 			EnemyType: 3, FireCd: 90, FireTimer: 45,
 			Hue: 30 + rand.Float64()*20,
 		})
@@ -223,7 +237,7 @@ func (g *Game) spawnEnemies() {
 			X: x, Y: y, Width: 36, Height: 36,
 			Health: hp, MaxHealth: hp,
 			VX: vx, VY: vy,
-			Score: 70 + g.Wave*2, ExpReward: 5, CoinDrop: 4,
+			Score: 70 + g.Wave*2, ExpReward: 8 + g.Wave*3/2, CoinDrop: 4,
 			EnemyType: 5, FireCd: 70, FireTimer: 30,
 			Hue: 180 + rand.Float64()*80,
 		})
@@ -362,19 +376,54 @@ func (g *Game) updateWave() {
 
 func (g *Game) spawnBoss() {
 	g.BossActive = true
-	// 首领按波数和击败次数同步成长，保证后期依旧有压迫感。
-	f := waveGrowth(g.Wave)
-	bossHp := int(100 * f) + g.BossDefeated*80
+	f := waveGrowth(g.Wave) * enemyGrowthMultiplier(g.Wave)
+	waveFloor := int(900*f) + g.BossDefeated*500
+	bossHp := waveFloor
+	if g.BossDefeated >= 3 {
+		bossHp = max(waveFloor, g.bossHPFromPlayerPower())
+	}
 	g.Enemies = append(g.Enemies, Enemy{
 		X: ScreenWidth / 2, Y: -100,
 		Width: 180, Height: 120,
 		Health: bossHp, MaxHealth: bossHp,
 		VX: 0, VY: 0,
-		Score: 300 + g.Wave*20, ExpReward: 50, CoinDrop: 60,
+		Score: 300 + g.Wave*20, ExpReward: 60 + g.Wave*3, CoinDrop: 60,
 		EnemyType: 4, FireCd: 0, FireTimer: 60,
 		Hue: 340,
 	})
 	g.ScreenShake = 20
+}
+
+func (g *Game) bossHPFromPlayerPower() int {
+	power := g.playerPowerEstimate()
+	return int(power * (12 + float64(g.Wave)*0.8))
+}
+
+func (g *Game) eliteHPFromPlayerPower(mult float64) int {
+	power := g.playerPowerEstimate()
+	return int(power * mult * 1.2)
+}
+
+func (g *Game) playerPowerEstimate() float64 {
+	p := g.Player
+	shots := float64(p.BulletCount + p.SideGuns*2)
+	if p.BackGun {
+		shots += 1
+	}
+	if p.TwinShip {
+		shots += 2.5
+	}
+	if p.FrontArc {
+		shots += 3
+	}
+	if p.LaserBeam {
+		shots += 5
+	}
+	if p.ChainLightning {
+		shots *= 1.25
+	}
+	crit := 1 + p.CritChance*(p.CritMult-1)
+	return float64(p.Damage) * shots * crit
 }
 
 func (g *Game) updateCoins() {
@@ -385,8 +434,8 @@ func (g *Game) updateCoins() {
 		dy := p.Y - c.Y
 		dist := math.Sqrt(dx*dx + dy*dy)
 
-		// 全屏吸附，金币不会遗漏。
-		if dist > 0.1 {
+		// 拾取范围由磁力属性控制，堆两张磁力装置后基本覆盖全屏。
+		if dist < p.PickupRange && dist > 0.1 {
 			pull := 0.45
 			if dist < p.PickupRange*2.5 {
 				pull = 0.9
@@ -422,8 +471,8 @@ func (g *Game) updateExpOrbs() {
 		dy := p.Y - e.Y
 		dist := math.Sqrt(dx*dx + dy*dy)
 
-		// 全屏吸附，经验直接被拉向玩家。
-		if dist > 0.1 {
+		// 拾取范围由磁力属性控制，堆两张磁力装置后基本覆盖全屏。
+		if dist < p.PickupRange && dist > 0.1 {
 			pull := 0.55
 			if dist < p.PickupRange*2.5 {
 				pull = 1.0

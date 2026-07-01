@@ -51,6 +51,19 @@ type Player struct {
 	Regen         float64
 	RegenTimer    int
 	Shield        int
+	ShieldSkill   bool
+	ShieldTimer   int
+	Lifesteal     float64
+	CritDefense   bool
+	GiantSlayer   bool
+	FlyingKick    bool
+	CritRhythm    bool
+	CritRhythmStacks int
+	CritRhythmTimer  int
+	UltimateMark  bool
+	UltimateTimer int
+	UltimateWindow int
+	BaronHand     bool
 	Invincible    int
 	Level         int
 	Exp           int
@@ -87,6 +100,7 @@ type Enemy struct {
 	FireTimer  int
 	BulletType int
 	Hue        float64
+	MarkedDamage int
 }
 
 type PowerUp struct {

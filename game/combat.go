@@ -18,10 +18,17 @@ func (g *Game) checkCollisions() {
 		for j := len(g.Enemies) - 1; j >= 0; j-- {
 			e := g.Enemies[j]
 			if math.Abs(b.X-e.X) < (e.Width/2+b.Size) && math.Abs(b.Y-e.Y) < (e.Height/2+b.Size) {
-				g.Enemies[j].Health -= b.Damage
+				dmg := g.playerDamageAgainst(e, b.Damage)
+				g.Enemies[j].Health -= dmg
+				g.onPlayerDealtDamage(float64(dmg), b.Color == (color.RGBA{255, 220, 100, 255}), j)
 				g.createHitParticles(b.X, b.Y, b.Color, 4)
 				if g.Player.ChainLightning {
-					g.chainLightningHit(e.X, e.Y, max(1, b.Damage/2))
+					g.chainLightningHit(e.X, e.Y, max(1, dmg/2))
+				}
+				if g.Player.FlyingKick && g.Enemies[j].Health > 0 && float64(g.Enemies[j].Health) < float64(g.Enemies[j].MaxHealth)*0.16 {
+					g.Enemies[j].Health = 0
+					g.Player.Health = math.Min(g.Player.Health+12, g.Player.MaxHealth)
+					g.createExplosion(g.Enemies[j].X, g.Enemies[j].Y, 2)
 				}
 
 				if b.Pierce > 0 {
@@ -146,7 +153,6 @@ func (g *Game) onEnemyDeath(idx int) {
 		g.BossDefeated++
 		g.Wave++
 		g.WaveTimer = 0
-		g.WaveDuration += 60 * 5
 		g.ScreenShake = 25
 		for i := 0; i < 5; i++ {
 			types := []int{0, 1, 2, 3}
@@ -192,6 +198,13 @@ func (g *Game) onEnemyDeath(idx int) {
 
 func (g *Game) damagePlayer(dmg float64) {
 	p := g.Player
+	if p.CritDefense {
+		chance := math.Min(0.5, p.CritChance)
+		if rand.Float64() < chance {
+			dmg *= 0.45
+			g.createHitParticles(p.X, p.Y, color.RGBA{120, 220, 255, 255}, 8)
+		}
+	}
 	if p.Shield > 0 {
 		p.Shield = 0
 		p.Invincible = 30
@@ -204,6 +217,32 @@ func (g *Game) damagePlayer(dmg float64) {
 	g.createExplosion(p.X, p.Y, 1)
 	if p.Health <= 0 {
 		g.gameOver()
+	}
+}
+
+func (g *Game) playerDamageAgainst(e Enemy, base int) int {
+	dmg := base
+	if g.Player.GiantSlayer && e.Width > g.Player.Width {
+		bonus := math.Min(0.30, math.Max(0.10, (e.Width-g.Player.Width)/e.Width*0.4))
+		dmg = int(float64(dmg) * (1 + bonus))
+	}
+	return max(1, dmg)
+}
+
+func (g *Game) onPlayerDealtDamage(dmg float64, crit bool, enemyIndex int) {
+	p := g.Player
+	if p.Lifesteal > 0 {
+		p.Health = math.Min(p.MaxHealth, p.Health+dmg*p.Lifesteal)
+	}
+	if crit && p.CritRhythm {
+		p.CritRhythmStacks = min(12, p.CritRhythmStacks+1)
+		p.CritRhythmTimer = 60 * 4
+	}
+	if crit && p.Lifesteal < 0.12 && p.CritChance >= 0.25 {
+		p.Health = math.Min(p.MaxHealth, p.Health+dmg*0.12)
+	}
+	if p.UltimateWindow > 0 && enemyIndex >= 0 && enemyIndex < len(g.Enemies) {
+		g.Enemies[enemyIndex].MarkedDamage += int(dmg * 0.75)
 	}
 }
 
@@ -236,16 +275,21 @@ func (g *Game) chainLightningHit(x, y float64, dmg int) {
 		dmg = 1
 	}
 	chain := 0
+	lastX, lastY := x, y
 	for i := range g.Enemies {
 		e := &g.Enemies[i]
-		dx := e.X - x
-		dy := e.Y - y
-		if math.Sqrt(dx*dx+dy*dy) < 120 {
+		if e.Health <= 0 {
+			continue
+		}
+		dx := e.X - lastX
+		dy := e.Y - lastY
+		if math.Sqrt(dx*dx+dy*dy) < 160 {
 			e.Health -= dmg
-			g.createLightningArc(x, y, e.X, e.Y)
-			g.createHitParticles(e.X, e.Y, color.RGBA{120, 220, 255, 255}, 4)
+			g.createLightningArc(lastX, lastY, e.X, e.Y)
+			g.createHitParticles(e.X, e.Y, color.RGBA{120, 220, 255, 255}, 6)
+			lastX, lastY = e.X, e.Y
 			chain++
-			if chain >= 3 {
+			if chain >= 4 {
 				break
 			}
 		}
@@ -253,18 +297,49 @@ func (g *Game) chainLightningHit(x, y float64, dmg int) {
 }
 
 func (g *Game) createLightningArc(x1, y1, x2, y2 float64) {
-	segments := 8
-	for i := 0; i <= segments; i++ {
-		t := float64(i) / float64(segments)
-		jx := (rand.Float64() - 0.5) * 10
-		jy := (rand.Float64() - 0.5) * 10
+	dx := x2 - x1
+	dy := y2 - y1
+	dist := math.Sqrt(dx*dx + dy*dy)
+
+	for j := 0; j < 3; j++ {
+		segs := 6 + rand.Intn(6)
+		for i := 0; i <= segs; i++ {
+			t := float64(i) / float64(segs)
+			jx := (rand.Float64() - 0.5) * dist * 0.15
+			jy := (rand.Float64() - 0.5) * dist * 0.15
+			sz := 2 + rand.Float64()*4
+			life := 6 + rand.Intn(8)
+
+			r := uint8(180 + rand.Intn(76))
+			gc := uint8(200 + rand.Intn(56))
+			b := uint8(255)
+			col := color.RGBA{r, gc, b, uint8(160 + rand.Intn(96))}
+
+			g.Particles = append(g.Particles, Particle{
+				X: x1 + dx*t + jx,
+				Y: y1 + dy*t + jy,
+				VX: (rand.Float64() - 0.5) * 0.5,
+				VY: (rand.Float64() - 0.5) * 0.5,
+				Life: life, MaxLife: 12,
+				Color: col,
+				Size:  sz,
+			})
+		}
+	}
+
+	midX := (x1 + x2) / 2
+	midY := (y1 + y2) / 2
+	for i := 0; i < 4; i++ {
+		a := rand.Float64() * math.Pi * 2
+		sp := 0.8 + rand.Float64()*1.8
 		g.Particles = append(g.Particles, Particle{
-			X: x1 + (x2-x1)*t + jx,
-			Y: y1 + (y2-y1)*t + jy,
-			VX: 0, VY: 0,
-			Life: 10, MaxLife: 10,
-			Color: color.RGBA{120, 220, 255, 255},
-			Size: 3,
+			X: midX + (rand.Float64()-0.5)*10,
+			Y: midY + (rand.Float64()-0.5)*10,
+			VX: math.Cos(a) * sp,
+			VY: math.Sin(a) * sp,
+			Life: 8 + rand.Intn(6), MaxLife: 14,
+			Color: color.RGBA{200, 230, 255, 255},
+			Size:  3 + rand.Float64()*3,
 		})
 	}
 }

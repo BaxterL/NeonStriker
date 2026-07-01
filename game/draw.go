@@ -173,8 +173,7 @@ func (g *Game) drawGame() {
 			vector.StrokeCircle(g.offscreen, float32(g.Player.X), float32(g.Player.Y), 32, 2.5, color.RGBA{100, 200, 255, uint8(255 * a)}, false)
 		}
 
-		pr := float32(g.Player.PickupRange)
-		vector.StrokeCircle(g.offscreen, float32(g.Player.X), float32(g.Player.Y), pr, 1, color.RGBA{200, 200, 255, 30}, false)
+
 	}
 
 	g.drawHUD()
