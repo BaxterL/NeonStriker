@@ -32,9 +32,10 @@ func (g *Game) fireWeapons() {
 	count := p.BulletCount
 	spreadDeg := float64(p.Spread)
 
+	hasExclusiveFire := p.LaserBeam || p.FrontArc
+
 	if p.LaserBeam {
 		g.Bullets = append(g.Bullets, makeB(p.X, p.Y-p.Height/2, 0, -speed*1.8, baseDmg*2, color.RGBA{255, 80, 200, 255}, 10, 6))
-		return
 	}
 
 	if p.FrontArc {
@@ -46,22 +47,24 @@ func (g *Game) fireWeapons() {
 		}
 	}
 
-	if count == 1 {
-		g.Bullets = append(g.Bullets, makeB(p.X, p.Y-p.Height/2, 0, -speed, baseDmg, bulletCol, bulletSize, 0))
-	} else {
-		var totalSpread float64
-		if count <= 3 {
-			totalSpread = spreadDeg + float64(count-1)*10
+	if !hasExclusiveFire {
+		if count == 1 {
+			g.Bullets = append(g.Bullets, makeB(p.X, p.Y-p.Height/2, 0, -speed, baseDmg, bulletCol, bulletSize, 0))
 		} else {
-			totalSpread = spreadDeg + 20 + float64(count-3)*20
-		}
-		step := totalSpread / float64(count-1)
-		startAngle := -totalSpread / 2
-		for i := 0; i < count; i++ {
-			angle := (startAngle + step*float64(i)) * math.Pi / 180
-			vx := math.Sin(angle) * speed
-			vy := -math.Cos(angle) * speed
-			g.Bullets = append(g.Bullets, makeB(p.X, p.Y-p.Height/2, vx, vy, baseDmg, bulletCol, bulletSize, 0))
+			var totalSpread float64
+			if count <= 3 {
+				totalSpread = spreadDeg + float64(count-1)*10
+			} else {
+				totalSpread = spreadDeg + 20 + float64(count-3)*20
+			}
+			step := totalSpread / float64(count-1)
+			startAngle := -totalSpread / 2
+			for i := 0; i < count; i++ {
+				angle := (startAngle + step*float64(i)) * math.Pi / 180
+				vx := math.Sin(angle) * speed
+				vy := -math.Cos(angle) * speed
+				g.Bullets = append(g.Bullets, makeB(p.X, p.Y-p.Height/2, vx, vy, baseDmg, bulletCol, bulletSize, 0))
+			}
 		}
 	}
 
